@@ -1,0 +1,8 @@
+Olá, {nome},
+
+O serviço de {servico} está próximo do período recomendado para renovação do certificado de garantia. A data prevista para o retorno é {dataRetorno}.
+Deseja agendar uma nova visita? Entre em contato conosco para combinarmos o melhor dia e horário.
+Estamos à disposição para garantir que seu ambiente continue protegido e seguro.
+
+Atenciosamente,
+Equipe Fimpra
