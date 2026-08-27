@@ -1,3 +1,0 @@
-Coluna A (A3) — "Total de Clientes Atrasados": É a contagem de todos os serviços cuja "Data de Retorno" já passou (estão marcados como 🔴 ATRASADO).
-- Coluna B (B3) — "Total Próximos a Vencer": É a contagem de todos os serviços que vencem nos próximos 7 dias (estão marcados como 🟡 PRÓXIMO).
-- Coluna C (C3) — "Total Contatos": É a contagem total de clientes que foram processados e adicionados à fila de contatos nesta execução da automação.
