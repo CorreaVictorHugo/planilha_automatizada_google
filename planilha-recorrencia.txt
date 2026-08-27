@@ -1,0 +1,55 @@
+1. Estrutura da Planilha
+
+O sistema é composto por abas que organizam os dados:
+
+- Abas de Serviço: Você mantém aqui o cadastro principal dos clientes (Nome, Telefone, Serviço, Data de Retorno). A automação lerá automaticamente todas as abas que possuírem essas colunas.
+- Fila WhatsApp: Aqui é gerada a lista diária de contatos. Ela mostra quem precisa ser chamado, o status do cliente (atrasado ou próximo) e já cria o link para abrir a conversa no WhatsApp automaticamente.
+- Painel Recorrência: Um resumo executivo para você visualizar o panorama geral dos seus atendimentos.
+- Configurações: Onde você personaliza o texto da mensagem que será enviada aos clientes.
+
+---
+
+2. Como o Sistema Funciona (Automação)
+
+Você não precisa rodar nada manualmente. O sistema está configurado para:
+- Executar todos os dias às 08:00.
+- Verificar a "Data de Retorno" de todos os seus clientes nas abas de serviço.
+- Classificar os contatos em:
+  - 🔴 ATRASADO: A data de retorno já passou.
+  - 🟡 PRÓXIMO: A data de retorno será nos próximos 7 dias.
+- Gerar o link de contato direto para o WhatsApp já com a mensagem pronta.
+- Atualizar os totais no Painel de Recorrência.
+
+---
+
+3. Guia de Operação
+
+A. Mantendo os dados atualizados
+
+Para que o sistema funcione corretamente, certifique-se de que nas abas de serviço os dados estejam preenchidos corretamente:
+- Coluna Nome: Nome completo do cliente.
+- Coluna Telefone: Apenas números (com DDD).
+- Coluna Serviço: Descrição do serviço.
+- Coluna Data Retorno: Data no formato de calendário.
+
+B. Marcando um contato como "Enviado"
+
+Após enviar a mensagem para o cliente pelo WhatsApp, você pode marcar esse cliente como "Enviado" para retirá-lo da Fila pendente:
+1. Abra a aba "Fila WhatsApp".
+2. Clique na linha referente ao cliente que você acabou de contatar.
+3. No menu superior da planilha, aparecerá um botão (ou via script) chamado "Marcar como Enviado". Ao clicar, o status mudará para "SIM" e a data será registrada.
+
+C. Personalizando a mensagem
+
+Se desejar mudar o texto que é enviado aos clientes:
+1. Vá até a aba "Configurações".
+2. Altere o texto na célula A1.
+3. Dica: Mantenha as partes entre chaves, como {nome}, {servico} e {dataRetorno}, pois o sistema usa esses marcadores para preencher as informações automaticamente.
+
+---
+
+4. Dúvidas Frequentes
+
+- O sistema precisa estar aberto? Não. A automação roda nos servidores do Google, então pode estar com o computador desligado.
+- Como vejo se está funcionando? Basta olhar a data e hora na aba "Painel Recorrência". Se a data estiver atualizada com o dia de hoje, o sistema rodou com sucesso.
+- Como mudar o horário de disparo? Entre em contato com o suporte técnico (eu) para reconfigurar o gatilho, se necessário.

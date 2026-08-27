@@ -1,0 +1,332 @@
+function testeEmail() {
+  const emailTeste = 'correavhc@gmail.com';
+  MailApp.sendEmail(
+    emailTeste,
+    'Teste — Automação de Recorrência',
+    'Se você recebeu esta mensagem, o envio de e-mail da automação está funcionando.'
+  );
+  SpreadsheetApp.getUi().alert('E-mail de teste enviado para ' + emailTeste);
+}
+
+function prepararEstrutura() {
+  const planilha = SpreadsheetApp.getActive();
+
+  const abasServico = planilha.getSheets().filter(function (aba) {
+    const cabecalhos = aba
+      .getRange(1, 1, 1, aba.getLastColumn())
+      .getValues()[0];
+
+    return (
+      cabecalhos.includes('Nome') &&
+      cabecalhos.includes('Data Retorno')
+    );
+  });
+
+  const novasColunas = [
+    'Prazo Recorrência (dias)',
+    'Permissão WhatsApp',
+    'Último Aviso WhatsApp',
+    'Status do Aviso',
+    'Link WhatsApp',
+  ];
+
+  abasServico.forEach(function (aba) {
+    let cabecalhos = aba
+      .getRange(1, 1, 1, aba.getLastColumn())
+      .getValues()[0];
+
+    novasColunas.forEach(function (coluna) {
+      if (!cabecalhos.includes(coluna)) {
+        aba.getRange(1, aba.getLastColumn() + 1).setValue(coluna);
+        cabecalhos.push(coluna);
+      }
+    });
+  });
+
+  let fila = planilha.getSheetByName('Fila WhatsApp');
+
+  if (!fila) {
+    fila = planilha.insertSheet('Fila WhatsApp');
+    fila.appendRow([
+      'Cliente',
+      'Telefone',
+      'Serviço',
+      'Data de retorno',
+      'Dias restantes',
+      'Mensagem',
+      'Link WhatsApp',
+      'Enviado?',
+    ]);
+  }
+
+  let painel = planilha.getSheetByName('Painel Recorrência');
+
+  if (!painel) {
+    painel = planilha.insertSheet('Painel Recorrência');
+    painel.getRange('A1:B2').setValues([
+      ['PAINEL DE RECORRÊNCIA', ''],
+      ['Status', 'Estrutura criada com sucesso'],
+    ]);
+  }
+
+  SpreadsheetApp.getUi().alert(
+    'Pronto! As colunas e abas auxiliares foram criadas.'
+  );
+}
+
+function gerarTesteClienteJulhoLinha9() {
+  const planilha = SpreadsheetApp.getActive();
+  const aba = planilha.getSheetByName('Julho');
+  const fila = planilha.getSheetByName('Fila WhatsApp');
+
+  // Verifica se a aba "Configurações" existe
+  const configAba = planilha.getSheetByName('Configurações');
+  if (!configAba) {
+    SpreadsheetApp.getUi().alert('A aba "Configurações" não existe. Crie-a e adicione o texto na célula A1.');
+    return;
+  }
+
+  // Leia o texto da mensagem da célula A1 da aba "Configurações"
+  const textoMensagem = configAba.getRange('A1').getValue();
+
+  const cabecalhos = aba
+    .getRange(1, 1, 1, aba.getLastColumn())
+    .getValues()[0];
+
+  const dados = aba
+    .getRange(9, 1, 1, aba.getLastColumn())
+    .getValues()[0];
+
+  const indice = {};
+
+  cabecalhos.forEach(function (coluna, posicao) {
+    indice[coluna] = posicao;
+  });
+
+  const nome = dados[indice['Nome']];
+  const telefoneOriginal = dados[indice['Telefone']];
+  const servico = dados[indice['Serviço']];
+  const dataRetorno = dados[indice['Data Retorno']];
+
+  const telefone = String(telefoneOriginal || '').replace(/\D/g, '');
+
+  if (!nome || !telefone || !dataRetorno) {
+    SpreadsheetApp.getUi().alert(
+      'Preencha Nome, Telefone e Data Retorno na linha 9 antes de testar.'
+    );
+    return;
+  }
+
+  const dataFormatada = Utilities.formatDate(
+    new Date(dataRetorno),
+    'America/Sao_Paulo',
+    'dd/MM/yyyy'
+  );
+
+  // Use o texto da aba "Configurações" e substitua os placeholders
+  const mensagem = textoMensagem
+    .replace('{nome}', nome)
+    .replace('{servico}', servico)
+    .replace('{dataRetorno}', dataFormatada);
+
+  const link =
+    'https://wa.me/55' +
+    telefone +
+    '?text=' +
+    encodeURIComponent(mensagem);
+
+  // Adicione a nova linha à aba "Fila WhatsApp"
+  fila.appendRow([
+    nome,
+    telefone,
+    servico,
+    dataFormatada,
+    mensagem,
+    link,
+    'NÃO',
+  ]);
+
+  SpreadsheetApp.getUi().alert(
+    'Nova linha adicionada à aba Fila WhatsApp. Nenhuma mensagem foi enviada.'
+  );
+}
+
+function testeEmailHtmlJulhoLinha5() {
+  const emailTeste = 'correavhc@gmail.com';
+
+  const planilha = SpreadsheetApp.getActive();
+  const aba = planilha.getSheetByName('Julho');
+
+  const cabecalhos = aba
+    .getRange(1, 1, 1, aba.getLastColumn())
+    .getValues()[0];
+
+  const dados = aba
+    .getRange(8, 1, 1, aba.getLastColumn())
+    .getValues()[0];
+
+  const indice = {};
+
+  cabecalhos.forEach(function (coluna, posicao) {
+    indice[coluna] = posicao;
+  });
+
+  const nome = dados[indice['Nome']];
+  const servico = dados[indice['Serviço']];
+  const dataRetorno = dados[indice['Data Retorno']];
+
+  const dataFormatada = Utilities.formatDate(
+    new Date(dataRetorno),
+    'America/Sao_Paulo',
+    'dd/MM/yyyy'
+  );
+
+  const assunto = 'Lembrete de recorrência — ' + servico;
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+      <body style="font-family:Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;">
+        <div style="background:#4CAF50;color:#fff;padding:10px;text-align:center;border-radius:5px;">
+          <h2>Notificação de Renovação de Serviço</h2>
+        </div>
+
+        <div style="padding:20px;background:#f9f9f9;border-radius:5px;">
+          <p>Olá, ${nome}, O serviço de <strong>${servico}</strong> está próximo do período
+            recomendado para renovação. A data prevista para o retorno é
+            <strong>${dataFormatada}.
+            Deseja agendar uma nova visita? Entre em contato conosco para
+            combinarmos o melhor dia e horário.
+            Estamos à disposição para garantir que seu ambiente continue
+            protegido e seguro.
+            Atenciosamente,<br>Equipe Fimpra</p>
+        </div>
+
+        <div style="margin-top:20px;font-size:12px;color:#777;text-align:center;">
+          <p>Esta é uma mensagem automática.</p>
+        </div>
+      </body>
+    </html>
+  `;
+
+  MailApp.sendEmail({
+    to: emailTeste,
+    subject: assunto,
+    body:
+      'Olá, ' + nome +
+      '. O serviço de ' + servico +
+      ' está previsto para retorno em ' + dataFormatada + '.',
+    htmlBody: html,
+  });
+
+  SpreadsheetApp.getUi().alert(
+    'E-mail HTML enviado somente para ' + emailTeste
+  );
+}
+
+function verificarRetornosDiarios() {
+  const planilha = SpreadsheetApp.getActive();
+  const abasServico = planilha.getSheets().filter(function (aba) {
+    const cabecalhos = aba
+      .getRange(1, 1, 1, aba.getLastColumn())
+      .getValues()[0];
+
+    return (
+      cabecalhos.includes('Nome') &&
+      cabecalhos.includes('Data Retorno') &&
+      cabecalhos.includes('Telefone') &&
+      cabecalhos.includes('Serviço')
+    );
+  });
+
+  const fila = planilha.getSheetByName('Fila WhatsApp');
+  if (!fila) {
+    SpreadsheetApp.getUi().alert('A aba "Fila WhatsApp" não existe.');
+    return;
+  }
+
+  const hoje = new Date();
+  const dataAtual = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+
+  abasServico.forEach(function (aba) {
+    const cabecalhos = aba
+      .getRange(1, 1, 1, aba.getLastColumn())
+      .getValues()[0];
+
+    const indice = {};
+    cabecalhos.forEach(function (coluna, posicao) {
+      indice[coluna] = posicao;
+    });
+
+    const dados = aba
+      .getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn())
+      .getValues();
+
+    dados.forEach(function (linha) {
+      const nome = linha[indice['Nome']];
+      const telefoneOriginal = linha[indice['Telefone']];
+      const servico = linha[indice['Serviço']];
+      const dataRetorno = linha[indice['Data Retorno']];
+
+      const telefone = String(telefoneOriginal || '').replace(/\D/g, '');
+
+      if (!nome || !telefone || !dataRetorno) {
+        return;
+      }
+
+      const dataRetornoObj = new Date(dataRetorno);
+      const diffTime = Math.abs(dataRetornoObj - dataAtual);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 1) {
+        const dataFormatada = Utilities.formatDate(
+          dataRetornoObj,
+          'America/Sao_Paulo',
+          'dd/MM/yyyy'
+        );
+
+        const mensagem = `Olá, ${nome}! O serviço de ${servico} está previsto para retorno em ${dataFormatada}. Deseja agendar uma nova visita?`;
+
+        const link = `https://wa.me/55${telefone}?text=${encodeURIComponent(mensagem)}`;
+
+        fila.appendRow([
+          nome,
+          telefone,
+          servico,
+          dataFormatada,
+          diffDays,
+          mensagem,
+          link,
+          'NÃO',
+        ]);
+      }
+    });
+  });
+}
+
+function criarGatilhoDiario() {
+  const hora = 8; // 8h da manhã
+  const minuto = 0;
+
+  const dataAtual = new Date();
+  const dataGatilho = new Date(
+    dataAtual.getFullYear(),
+    dataAtual.getMonth(),
+    dataAtual.getDate(),
+    hora,
+    minuto,
+    0
+  );
+
+  if (dataAtual > dataGatilho) {
+    dataGatilho.setDate(dataGatilho.getDate() + 1);
+  }
+
+  ScriptApp.newTrigger('verificarRetornosDiarios')
+    .timeBased()
+    .at(dataGatilho)
+    .everyDays(1)
+    .create();
+
+  SpreadsheetApp.getUi().alert('Gatilho diário criado para as 8h da manhã.');
+}
