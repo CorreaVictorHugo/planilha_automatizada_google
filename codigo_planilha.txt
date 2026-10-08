@@ -26,7 +26,7 @@
 // --------------------------------------------------------------------------
 // ALTERE AQUI O E-MAIL QUE RECEBERÁ O RELATÓRIO INTERNO
 // --------------------------------------------------------------------------
-const EMAIL_RELATORIO = 'correavhc@gmail.com';
+const EMAIL_RELATORIO = 'seu email';
 
 
 // --------------------------------------------------------------------------
@@ -34,14 +34,9 @@ const EMAIL_RELATORIO = 'correavhc@gmail.com';
 // --------------------------------------------------------------------------
 // Use apenas DDD + número.
 //
-// CERTO:
-// 21971909590
-//
-// NÃO use:
-// +55 21 97190-9590
 //
 // O código adicionará o 55 automaticamente.
-const WHATSAPP_EMPRESA = '21971909590';
+const WHATSAPP_EMPRESA = 'seu telefone';
 
 
 // Horário da atualização diária e do relatório semanal.
