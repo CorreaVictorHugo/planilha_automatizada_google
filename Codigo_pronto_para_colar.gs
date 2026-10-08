@@ -1,0 +1,3015 @@
+// ============================================================================
+// FIMPRA - CONTROLE DE RECORRÊNCIA DE SERVIÇOS
+// ============================================================================
+// Funções:
+// - Menu suspenso para seleção dos serviços
+// - Cálculo automático da Data Retorno
+// - Recorrência configurável por tipo de serviço
+// - Criação automática das abas mensais
+// - Cópia da linha para o mês da próxima recorrência
+// - Proteção contra registros duplicados
+// - Fila WhatsApp
+// - Painel de Recorrência
+// - Relatório interno diário por e-mail
+// - Relatório preparado para WhatsApp
+//
+// IMPORTANTE:
+// Execute "configurarSistema()" UMA VEZ após instalar este código.
+// Depois disso, o gatilho executará a rotina diária automaticamente.
+// ============================================================================
+
+
+// ============================================================================
+// 1. CONFIGURAÇÕES GERAIS
+// ============================================================================
+
+// --------------------------------------------------------------------------
+// ALTERE AQUI O E-MAIL QUE RECEBERÁ O RELATÓRIO INTERNO
+// --------------------------------------------------------------------------
+const EMAIL_RELATORIO = 'correavhc@gmail.com';
+
+
+// --------------------------------------------------------------------------
+// ALTERE AQUI O WHATSAPP DA EMPRESA
+// --------------------------------------------------------------------------
+// Use apenas DDD + número.
+//
+// CERTO:
+// 21971909590
+//
+// NÃO use:
+// +55 21 97190-9590
+//
+// O código adicionará o 55 automaticamente.
+const WHATSAPP_EMPRESA = '21971909590';
+
+
+// Horário da atualização diária e do relatório semanal.
+const HORA_RELATORIO = 8;
+
+// O e-mail de serviços atrasados será enviado somente às segundas-feiras.
+const DIA_RELATORIO_SEMANAL = 1;
+
+// A rotina cria recorrências somente neste intervalo.
+// No JavaScript, janeiro é o mês 0 e julho é o mês 6.
+const INICIO_PLANEJAMENTO = new Date(2026, 6, 1);
+const LIMITE_PLANEJAMENTO = new Date(2027, 0, 31);
+
+// Aba usada como modelo visual e funcional das novas abas mensais.
+const ABA_MODELO_MENSAL = 'Julho';
+
+// Fuso horário.
+const TIMEZONE = 'America/Sao_Paulo';
+
+// Nome das abas administrativas.
+const ABA_CONFIG = 'Config Serviços';
+const ABA_FILA = 'Fila WhatsApp';
+const ABA_PAINEL = 'Painel Recorrência';
+
+// Cabeçalhos esperados nas abas mensais.
+const CABECALHOS_SERVICOS = [
+  'Nome',
+  'Telefone',
+  'Email',
+  'Endereço',
+  'Serviço',
+  'Valor',
+  'Data Serviço',
+  'Data Retorno',
+  'Status',
+  'Status Automático',
+  'Observação',
+  'Agendar',
+  'Data Reagendamento',
+  'Vendedor'
+];
+
+// Abas que nunca devem ser tratadas como meses.
+const ABAS_IGNORADAS = [
+  ABA_CONFIG,
+  ABA_FILA,
+  ABA_PAINEL,
+  'Configurações',
+  'Prospecção'
+];
+
+
+// ============================================================================
+// 2. REGRAS DE RECORRÊNCIA
+// ============================================================================
+//
+// O número representa a quantidade de MESES.
+//
+// Cupins:
+// 12 meses = 1 ano
+//
+const SERVICOS_RECORRENCIA = {
+  'Baratas': 3,
+  'Formigas': 3,
+  'Traças': 3,
+  'Ratos': 3,
+  'Baratas e Formigas': 3,
+  'Baratas e Traças': 3,
+  'Formigas e Traças': 3,
+  'Baratas, Formigas e Traças': 3,
+  'Baratas e Ratos': 3,
+  'Baratas, Formigas e Ratos': 3,
+  "Caixa d'água": 6,
+  'DDT Mensal': 1,
+  'DDT Bimestral': 2,
+  'DDT': 3,
+  'Cupins': 12
+};
+
+// Variações que já existem em registros antigos da planilha.
+// Todas apontam para a regra principal de recorrência.
+const ALIASES_SERVICOS = {
+  'cupim': 'Cupins',
+  'barata e formiga': 'Baratas e Formigas',
+  'traca': 'Traças',
+  'barata e traca': 'Baratas e Traças',
+  'traca e barata': 'Baratas e Traças',
+  'formiga e traca': 'Formigas e Traças',
+  'traca e formiga': 'Formigas e Traças',
+  'barata, formiga e traca': 'Baratas, Formigas e Traças',
+  'barata, traca e formiga': 'Baratas, Formigas e Traças',
+  'ddt mes': 'DDT Mensal',
+  'ddt bimestre': 'DDT Bimestral',
+  'limpeza cx dagua': "Caixa d'água"
+};
+
+
+// ============================================================================
+// 3. CONFIGURAÇÃO INICIAL DO SISTEMA
+// ============================================================================
+//
+// EXECUTE ESTA FUNÇÃO MANUALMENTE UMA VEZ.
+//
+// Ela:
+// - cria as abas administrativas;
+// - cria Config Serviços;
+// - cria os menus suspensos;
+// - cria o gatilho diário de atualização; o e-mail é enviado às segundas.
+//
+// ============================================================================
+function configurarSistema() {
+
+  try {
+
+    // 1. Cria/verifica Fila WhatsApp e Painel Recorrência.
+    prepararEstrutura();
+
+    // 2. Cria a aba com as regras de recorrência.
+    criarAbaConfigServicos();
+
+    // 3. Adiciona os menus suspensos das colunas Serviço e Status.
+    configurarMenusServicos();
+    configurarMenusStatus();
+
+    // 4. Padroniza as cores dos serviços confirmados e a confirmar.
+    aplicarFormatacaoStatusAbasMensais();
+    pintarLinhasStatusExistentes();
+    atualizarTodosLinksAgenda();
+    ordenarTodasAbasMensaisPorDataServico();
+
+    // 5. Cria o gatilho diário das 8h para atualizar a fila e o painel.
+    criarGatilhoDiario();
+
+    // Logger funciona tanto em execução manual
+    // quanto em execução por gatilho.
+    Logger.log('====================================');
+    Logger.log('Sistema configurado com sucesso!');
+    Logger.log('Config Serviços: OK');
+    Logger.log('Menus suspensos: OK');
+    Logger.log('Painel: OK');
+    Logger.log('Fila WhatsApp: OK');
+    Logger.log('Gatilho de atualização diária: OK');
+    Logger.log('E-mail semanal: segunda-feira às 8h');
+    Logger.log('====================================');
+
+  } catch (error) {
+
+    // Não usamos SpreadsheetApp.getUi() aqui porque
+    // determinados contextos de execução não possuem UI.
+    Logger.log(
+      'ERRO AO CONFIGURAR SISTEMA: ' +
+      error.message
+    );
+
+    Logger.log(error.stack);
+
+    // Relança o erro para o Apps Script mostrar
+    // corretamente qual operação falhou.
+    throw error;
+  }
+}
+
+// ============================================================================
+// 4. FUNÇÃO PRINCIPAL DIÁRIA
+// ============================================================================
+//
+// Esta função será executada automaticamente pelo gatilho.
+//
+// Ela:
+// - verifica vencimentos;
+// - atualiza painel;
+// - atualiza fila;
+// - envia relatório interno.
+//
+function executarAutomacaoCompleta() {
+
+  try {
+
+    prepararEstrutura();
+
+    limparDadosAntigos();
+
+    ordenarTodasAbasMensaisPorDataServico();
+
+    const resumo = processarServicos();
+
+    atualizarPainelRecorrencia();
+
+    enviarRelatorioDiario(resumo);
+
+    Logger.log(
+      'Automação diária executada: ' +
+      Utilities.formatDate(new Date(), TIMEZONE, 'dd/MM/yyyy HH:mm:ss')
+    );
+
+  } catch (error) {
+
+    Logger.log('Erro executarAutomacaoCompleta: ' + error.stack);
+
+    // O alert pode não aparecer quando a função roda por gatilho.
+    // O Logger continuará registrando o erro.
+  }
+}
+
+
+// ============================================================================
+// 5. CRIAR ABA CONFIG SERVIÇOS
+// ============================================================================
+
+function criarAbaConfigServicos() {
+
+  const planilha = SpreadsheetApp.getActive();
+
+  let aba = planilha.getSheetByName(ABA_CONFIG);
+
+  if (!aba) {
+
+    aba = planilha.insertSheet(ABA_CONFIG);
+
+  } else {
+
+    aba.clear();
+  }
+
+  aba.getRange('A1:B1').setValues([
+    ['Serviço', 'Recorrência (meses)']
+  ]);
+
+  const dados = Object.entries(SERVICOS_RECORRENCIA);
+
+  if (dados.length > 0) {
+
+    aba.getRange(
+      2,
+      1,
+      dados.length,
+      2
+    ).setValues(dados);
+  }
+
+  // Formatação.
+  aba.getRange('A1:B1')
+    .setBackground('#2E7D32')
+    .setFontColor('white')
+    .setFontWeight('bold');
+
+  aba.setFrozenRows(1);
+
+  aba.setColumnWidth(1, 250);
+  aba.setColumnWidth(2, 180);
+}
+
+
+// ============================================================================
+// 6. CONFIGURAR MENU SUSPENSO DE SERVIÇOS
+// ============================================================================
+
+function configurarMenusServicos() {
+
+  const planilha = SpreadsheetApp.getActive();
+
+  const listaServicos = Object.keys(SERVICOS_RECORRENCIA);
+
+  const regra = SpreadsheetApp
+    .newDataValidation()
+    .requireValueInList(listaServicos, true)
+    .setAllowInvalid(false)
+    .setHelpText('Selecione o serviço realizado.')
+    .build();
+
+  obterAbasMensais().forEach(function(aba) {
+
+    const colunaServico = encontrarColuna(aba, 'Serviço');
+
+    if (!colunaServico) return;
+
+    // Aplica até a linha 1000.
+    // Pode ser aumentado futuramente se necessário.
+    aba.getRange(
+      2,
+      colunaServico,
+      999,
+      1
+    ).setDataValidation(regra);
+  });
+}
+
+
+// Atualiza somente a lista de serviços e os menus suspensos das abas mensais.
+function atualizarListaServicos() {
+
+  criarAbaConfigServicos();
+  configurarMenusServicos();
+
+  SpreadsheetApp
+    .getUi()
+    .alert(
+      'Lista de serviços atualizada, incluindo Traças e as combinações com insetos.'
+    );
+}
+
+
+// ============================================================================
+// 6. MENU SUSPENSO DE STATUS
+// ============================================================================
+//
+// O Status (coluna I) registra uma ação da equipe. A situação visual e
+// automática de cada serviço fica na coluna J.
+//
+function configurarMenusStatus() {
+
+  const planilha = SpreadsheetApp.getActive();
+
+  const regra = SpreadsheetApp
+    .newDataValidation()
+    .requireValueInList([
+      'Reagendado',
+      'Retornar Contato'
+    ], true)
+    .setAllowInvalid(false)
+    .setHelpText(
+      'Use Reagendado para informar uma nova data ou Retornar Contato para acompanhar o cliente.'
+    )
+    .build();
+
+  obterAbasMensais().forEach(function(aba) {
+    configurarMenuStatusDaAba(aba, regra);
+  });
+}
+
+
+function configurarMenuStatusDaAba(aba, regraExistente) {
+
+  const regra = regraExistente || SpreadsheetApp
+    .newDataValidation()
+    .requireValueInList([
+      'Reagendado',
+      'Retornar Contato'
+    ], true)
+    .setAllowInvalid(false)
+    .setHelpText(
+      'Use Reagendado para informar uma nova data ou Retornar Contato para acompanhar o cliente.'
+    )
+    .build();
+
+  const colunaStatus = encontrarColuna(aba, 'Status');
+
+  if (!colunaStatus) return;
+
+  aba.getRange(2, colunaStatus, 999, 1)
+    .setDataValidation(regra);
+}
+
+
+// ============================================================================
+// 7. AUTOMAÇÃO AO EDITAR A PLANILHA
+// ============================================================================
+//
+// Esta função é executada quando uma célula é alterada.
+//
+// Quando Serviço ou Data Serviço forem preenchidos:
+// - calcula a Data Retorno.
+//
+// Ao escolher Reagendado, informe a nova data diretamente na coluna Data
+// Serviço. Assim que a data for alterada, o retorno é recalculado e a
+// recorrência futura é criada. A coluna Agendar continua livre para o link do
+// Google Agenda.
+//
+// ============================================================================
+function onEdit(e) {
+
+  if (!e || !e.range) return;
+
+  try {
+
+    const aba = e.range.getSheet();
+
+    if (!ehAbaMensal(aba)) return;
+
+    const linha = e.range.getRow();
+
+    if (linha <= 1) return;
+
+    const indice = obterIndicesCabecalho(aba);
+
+    const colunaEditada = e.range.getColumn();
+
+    const colServico = indice['Serviço'];
+    const colDataServico = indice['Data Serviço'];
+    const colStatus = indice['Status'];
+    const colStatusAutomatico = indice['Status Automático'];
+    const colDataReagendamento = indice['Data Reagendamento'];
+
+    const colunasDoLinkAgenda = [
+      indice['Nome'],
+      indice['Telefone'],
+      indice['Email'],
+      indice['Endereço'],
+      indice['Serviço'],
+      indice['Data Serviço'],
+      indice['Observação']
+    ];
+
+    if (colunasDoLinkAgenda.includes(colunaEditada)) {
+      atualizarLinkAgendarLinha(aba, linha);
+    }
+    // ----------------------------------------------------------------------
+    // Serviço ou Data Serviço alterados
+    // ----------------------------------------------------------------------
+    if (
+      colunaEditada === colServico ||
+      colunaEditada === colDataServico
+    ) {
+
+      calcularDataRetornoLinha(aba, linha);
+
+      const statusManual = normalizarTexto(
+        aba.getRange(linha, colStatus).getValue()
+      );
+
+      if (
+        statusManual !== 'reagendado' &&
+        statusManual !== 'reagendar'
+      ) {
+
+        // Uma linha preenchida manualmente representa um serviço confirmado.
+        const novoServicoAgendado = marcarServicoAgendadoSeCompleto(
+          aba,
+          linha,
+          colStatusAutomatico
+        );
+
+        // Para um serviço novo confirmado, já deixa a próxima recorrência
+        // visível como "A CONFIRMAR" no mês correspondente.
+        if (novoServicoAgendado) {
+          criarProximaRecorrencia(aba, linha, true);
+        }
+      }
+    }
+
+
+    // ----------------------------------------------------------------------
+    // Data de reagendamento escolhida no calendário
+    // ----------------------------------------------------------------------
+    if (colunaEditada === colDataReagendamento) {
+
+      const status = normalizarTexto(
+        aba.getRange(linha, colStatus).getValue()
+      );
+
+      if (
+        status === 'reagendado' ||
+        status === 'reagendar'
+      ) {
+        finalizarReagendamento(aba, linha);
+      }
+    }
+
+
+    // ----------------------------------------------------------------------
+    // Ação informada no Status
+    // ----------------------------------------------------------------------
+    if (colunaEditada === colStatus) {
+
+      const status = normalizarTexto(
+        aba.getRange(linha, colStatus).getValue()
+      );
+
+      if (
+        status === 'reagendado' ||
+        status === 'reagendar'
+      ) {
+        definirStatusAutomatico(
+          aba,
+          linha,
+          '🟡 ESCOLHA A DATA'
+        );
+
+        const dataJaEscolhida = colDataReagendamento && aba
+          .getRange(linha, colDataReagendamento)
+          .getValue();
+
+        if (dataJaEscolhida) {
+          finalizarReagendamento(aba, linha);
+          ordenarTodasAbasMensaisPorDataServico();
+        }
+
+      } else if (status === 'retornar contato') {
+
+        definirStatusAutomatico(
+          aba,
+          linha,
+          '🔵 RETORNAR CONTATO'
+        );
+      }
+    }
+
+
+    // Mantém as visitas em ordem cronológica nas abas mensais sempre que
+    // serviço, data ou reagendamento forem alterados.
+    if (
+      colunaEditada === colServico ||
+      colunaEditada === colDataServico ||
+      colunaEditada === colDataReagendamento
+    ) {
+      ordenarTodasAbasMensaisPorDataServico();
+    }
+
+  } catch (error) {
+
+    Logger.log('Erro onEdit: ' + error.stack);
+  }
+}
+
+
+// ============================================================================
+// 8. APOIO AO STATUS AUTOMÁTICO
+// ============================================================================
+
+function marcarServicoAgendadoSeCompleto(
+  aba,
+  linha,
+  colStatusAutomatico
+) {
+
+  if (!colStatusAutomatico) return false;
+
+  const indice = obterIndicesCabecalho(aba);
+  const servico = aba.getRange(linha, indice['Serviço']).getValue();
+  const dataServico = aba.getRange(linha, indice['Data Serviço']).getValue();
+  const statusAtual = aba
+    .getRange(linha, colStatusAutomatico)
+    .getValue();
+
+  if (
+    servico &&
+    dataServico &&
+    !String(statusAtual).trim()
+  ) {
+    definirStatusAutomatico(aba, linha, '🟢 AGENDADO');
+    return true;
+  }
+
+  return false;
+}
+
+
+function definirStatusAutomatico(aba, linha, status) {
+
+  const indice = obterIndicesCabecalho(aba);
+  const coluna = indice['Status Automático'];
+
+  if (!coluna) return;
+
+  aba.getRange(linha, coluna).setValue(status);
+  pintarLinhaConformeStatus(aba, linha, status);
+}
+
+
+// Aplica a cor diretamente na linha para que ela fique visível mesmo quando
+// uma regra condicional antiga da planilha for removida ou estiver desativada.
+function pintarLinhaConformeStatus(aba, linha, status) {
+
+  const intervalo = aba.getRange(
+    linha,
+    1,
+    1,
+    aba.getLastColumn()
+  );
+
+  const texto = String(status || '');
+
+  if (texto.startsWith('🟢')) {
+    intervalo.setBackground('#E2F0D9').setFontColor('#1F4D2E');
+
+  } else if (texto.startsWith('🟡')) {
+    intervalo.setBackground('#FFF2CC').setFontColor('#7F6000');
+
+  } else if (texto.startsWith('🔴')) {
+    intervalo.setBackground('#FCE8E6').setFontColor('#8A1C1C');
+
+  } else if (texto.startsWith('🔵')) {
+    intervalo.setBackground('#E8F0FE').setFontColor('#174EA6');
+  }
+}
+
+
+function pintarLinhasStatusExistentes() {
+
+  obterAbasMensais().forEach(function(aba) {
+
+    if (aba.getLastRow() <= 1) return;
+
+    const indice = obterIndicesCabecalho(aba);
+    const colunaStatusAutomatico = indice['Status Automático'];
+
+    if (!colunaStatusAutomatico) return;
+
+    const status = aba
+      .getRange(2, colunaStatusAutomatico, aba.getLastRow() - 1, 1)
+      .getValues();
+
+    status.forEach(function(valor, indiceLinha) {
+      pintarLinhaConformeStatus(
+        aba,
+        indiceLinha + 2,
+        valor[0]
+      );
+    });
+  });
+}
+
+
+// ============================================================================
+// 9. LINK DO GOOGLE AGENDA
+// ============================================================================
+//
+// Gera o link com endereço tanto na descrição quanto no campo "Local" do
+// evento. O Google Agenda interpreta o parâmetro location como local do
+// compromisso.
+//
+function atualizarTodosLinksAgenda() {
+
+  obterAbasMensais().forEach(function(aba) {
+
+    if (aba.getLastRow() <= 1) return;
+
+    for (let linha = 2; linha <= aba.getLastRow(); linha++) {
+      atualizarLinkAgendarLinha(aba, linha);
+    }
+  });
+}
+
+
+function atualizarLinkAgendarLinha(aba, linha) {
+
+  const indice = obterIndicesCabecalho(aba);
+
+  if (!indice['Agendar']) return;
+
+  const dados = aba
+    .getRange(linha, 1, 1, aba.getLastColumn())
+    .getValues()[0];
+
+  const nome = dados[indice['Nome'] - 1];
+  const telefone = dados[indice['Telefone'] - 1];
+  const email = dados[indice['Email'] - 1];
+  const endereco = dados[indice['Endereço'] - 1];
+  const servico = dados[indice['Serviço'] - 1];
+  const dataServico = dados[indice['Data Serviço'] - 1];
+  const observacao = dados[indice['Observação'] - 1];
+
+  if (!nome || !servico || !dataServico) return;
+
+  const inicio = zerarHorario(new Date(dataServico));
+
+  if (isNaN(inicio.getTime())) return;
+
+  // Eventos de dia inteiro usam a data final exclusiva no Google Agenda.
+  const fim = new Date(inicio);
+  fim.setDate(fim.getDate() + 1);
+
+  const titulo = String(nome) + ' - ' + String(servico);
+  const descricao = [
+    telefone ? 'Telefone: ' + telefone : '',
+    email ? 'Email: ' + email : '',
+    endereco ? 'Endereço: ' + endereco : '',
+    observacao ? 'Obs: ' + observacao : ''
+  ].filter(Boolean).join('\n');
+
+  const link =
+    'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+    '&text=' + encodeURIComponent(titulo) +
+    '&dates=' + formatarDataAgenda(inicio) +
+    '/' + formatarDataAgenda(fim) +
+    '&details=' + encodeURIComponent(descricao) +
+    '&location=' + encodeURIComponent(endereco || '');
+
+  aba
+    .getRange(linha, indice['Agendar'])
+    .setFormula(
+      '=HYPERLINK("' + link + '";"📅 Agendar")'
+    );
+}
+
+
+function formatarDataAgenda(data) {
+
+  return Utilities.formatDate(
+    data,
+    TIMEZONE,
+    'yyyyMMdd'
+  );
+}
+
+
+function finalizarReagendamento(aba, linha) {
+
+  const indice = obterIndicesCabecalho(aba);
+  const dataReagendamento = aba
+    .getRange(linha, indice['Data Reagendamento'])
+    .getValue();
+
+  if (!dataReagendamento) return null;
+
+  const data = new Date(dataReagendamento);
+
+  if (isNaN(data.getTime())) return null;
+
+  const nomeAbaDestino = obterNomeMes(data);
+  const mesmaAba = aba.getName() === nomeAbaDestino;
+  let servicoReagendado;
+
+  if (mesmaAba) {
+
+    // Quando a data continua no mesmo mês, a própria linha é atualizada.
+    aba
+      .getRange(linha, indice['Data Serviço'])
+      .setValue(data)
+      .setNumberFormat('dd/MM/yyyy');
+
+    calcularDataRetornoLinha(aba, linha);
+    definirStatusAutomatico(aba, linha, '🟢 REAGENDADO');
+
+    servicoReagendado = {
+      aba: aba,
+      linha: linha
+    };
+
+  } else {
+
+    // Mantém o registro original como histórico e cria o serviço confirmado
+    // na aba correspondente à data escolhida.
+    definirStatusAutomatico(
+      aba,
+      linha,
+      '↪️ REAGENDADO - COPIADO'
+    );
+
+    servicoReagendado = criarProximaRecorrencia(
+      aba,
+      linha,
+      true,
+      data,
+      '🟢 REAGENDADO',
+      'Reagendado'
+    );
+  }
+
+  if (!servicoReagendado) return null;
+
+  // A partir do serviço reagendado confirmado, gera a visita posterior como
+  // "A CONFIRMAR" no mês correto.
+  return criarProximaRecorrencia(
+    servicoReagendado.aba,
+    servicoReagendado.linha,
+    true
+  );
+}
+
+
+// ============================================================================
+// 9. CORES DOS STATUS NAS ABAS MENSAIS
+// ============================================================================
+//
+// Remove somente regras antigas que envolvem a coluna J. Assim, a coluna J
+// deixa de decidir sozinha a cor da linha e passa a mostrar a situação
+// automática definida pelo código.
+//
+function aplicarFormatacaoStatusAbasMensais() {
+
+  obterAbasMensais().forEach(function(aba) {
+    aplicarFormatacaoStatusNaAba(aba);
+  });
+}
+
+
+function aplicarFormatacaoStatusNaAba(aba) {
+
+  const indice = obterIndicesCabecalho(aba);
+  const colunaStatusAutomatico = indice['Status Automático'];
+
+  if (!colunaStatusAutomatico) return;
+
+  const intervaloLinhas = aba.getRange(
+    2,
+    1,
+    999,
+    aba.getLastColumn()
+  );
+
+  const letraStatusAutomatico = obterLetraColuna(
+    colunaStatusAutomatico
+  );
+
+  const agendadoOuReagendado = SpreadsheetApp
+    .newConditionalFormatRule()
+    .whenFormulaSatisfied(
+      '=LEFT($' + letraStatusAutomatico + '2,1)="🟢"'
+    )
+    .setBackground('#E2F0D9')
+    .setFontColor('#1F4D2E')
+    .setRanges([intervaloLinhas])
+    .build();
+
+  const aConfirmar = SpreadsheetApp
+    .newConditionalFormatRule()
+    .whenFormulaSatisfied(
+      '=LEFT($' + letraStatusAutomatico + '2,1)="🟡"'
+    )
+    .setBackground('#FFF2CC')
+    .setFontColor('#7F6000')
+    .setRanges([intervaloLinhas])
+    .build();
+
+  const atrasado = SpreadsheetApp
+    .newConditionalFormatRule()
+    .whenFormulaSatisfied(
+      '=LEFT($' + letraStatusAutomatico + '2,1)="🔴"'
+    )
+    .setBackground('#FCE8E6')
+    .setFontColor('#8A1C1C')
+    .setRanges([intervaloLinhas])
+    .build();
+
+  const retornarContato = SpreadsheetApp
+    .newConditionalFormatRule()
+    .whenFormulaSatisfied(
+      '=LEFT($' + letraStatusAutomatico + '2,1)="🔵"'
+    )
+    .setBackground('#E8F0FE')
+    .setFontColor('#174EA6')
+    .setRanges([intervaloLinhas])
+    .build();
+
+  // Substitui regras antigas para que a cor seja aplicada à linha inteira,
+  // e não somente ao ícone da coluna Status Automático.
+  aba.setConditionalFormatRules([
+    agendadoOuReagendado,
+    aConfirmar,
+    atrasado,
+    retornarContato
+  ]);
+}
+
+
+function obterLetraColuna(numeroColuna) {
+
+  let numero = numeroColuna;
+  let letras = '';
+
+  while (numero > 0) {
+    const resto = (numero - 1) % 26;
+    letras = String.fromCharCode(65 + resto) + letras;
+    numero = Math.floor((numero - 1) / 26);
+  }
+
+  return letras;
+}
+
+
+// ============================================================================
+// 8. CALCULAR DATA DE RETORNO
+// ============================================================================
+
+function calcularDataRetornoLinha(aba, linha) {
+
+  const indice = obterIndicesCabecalho(aba);
+
+  const servico = aba
+    .getRange(linha, indice['Serviço'])
+    .getValue();
+
+  const dataServico = aba
+    .getRange(linha, indice['Data Serviço'])
+    .getValue();
+
+  if (!servico || !dataServico) return;
+
+  const meses = buscarRecorrenciaServico(servico);
+
+  if (!meses) return;
+
+  const data = new Date(dataServico);
+
+  if (isNaN(data.getTime())) return;
+
+  const dataRetorno = adicionarMesesSeguro(data, meses);
+
+  aba
+    .getRange(linha, indice['Data Retorno'])
+    .setValue(dataRetorno)
+    .setNumberFormat('dd/MM/yyyy');
+}
+
+
+// ============================================================================
+// 9. BUSCAR RECORRÊNCIA
+// ============================================================================
+
+function buscarRecorrenciaServico(servico) {
+
+  const servicoNormalizado = normalizarTexto(servico);
+
+  const nomePadrao =
+    ALIASES_SERVICOS[servicoNormalizado] ||
+    servicoNormalizado;
+
+  for (const [nome, meses] of Object.entries(SERVICOS_RECORRENCIA)) {
+
+    if (
+      normalizarTexto(nome) === nomePadrao
+    ) {
+
+      return meses;
+    }
+  }
+
+  return null;
+}
+
+
+// ============================================================================
+// 10. ADICIONAR MESES COM SEGURANÇA
+// ============================================================================
+//
+// Evita problemas como:
+//
+// 31/01 + 1 mês
+//
+// JavaScript poderia produzir uma data inesperada.
+// Esta função ajusta para o último dia válido do mês.
+//
+// ============================================================================
+function adicionarMesesSeguro(dataOriginal, meses) {
+
+  const data = new Date(dataOriginal);
+
+  const diaOriginal = data.getDate();
+
+  data.setDate(1);
+
+  data.setMonth(data.getMonth() + meses);
+
+  const ultimoDiaMes = new Date(
+    data.getFullYear(),
+    data.getMonth() + 1,
+    0
+  ).getDate();
+
+  data.setDate(
+    Math.min(diaOriginal, ultimoDiaMes)
+  );
+
+  return data;
+}
+
+
+// ============================================================================
+// 11. CRIAR PRÓXIMA RECORRÊNCIA
+// ============================================================================
+
+function criarProximaRecorrencia(
+  abaOrigem,
+  linhaOrigem,
+  silencioso,
+  dataServicoForcada,
+  statusAutomaticoInicial,
+  statusManualInicial
+) {
+
+  const planilha = SpreadsheetApp.getActive();
+
+  const indice = obterIndicesCabecalho(abaOrigem);
+
+  const ultimaColuna = abaOrigem.getLastColumn();
+
+  const dadosLinha = abaOrigem
+    .getRange(linhaOrigem, 1, 1, ultimaColuna)
+    .getValues()[0];
+
+  const nome = dadosLinha[indice['Nome'] - 1];
+  const telefone = dadosLinha[indice['Telefone'] - 1];
+  const servico = dadosLinha[indice['Serviço'] - 1];
+  const dataRetorno = dadosLinha[indice['Data Retorno'] - 1];
+
+  if (
+    !nome ||
+    !servico ||
+    !dataRetorno
+  ) {
+
+    exibirMensagemRecorrencia(
+      'Não foi possível criar a recorrência.\n\n' +
+      'Verifique Nome, Serviço e Data Retorno.',
+      silencioso
+    );
+
+    return null;
+  }
+
+  const meses = buscarRecorrenciaServico(servico);
+
+  // Nunca criar uma recorrência sem uma regra válida. Sem esta proteção,
+  // um valor não cadastrado faria a Data Serviço e a Data Retorno ficarem
+  // iguais.
+  if (!meses) {
+
+    Logger.log(
+      'Recorrência não criada: serviço sem regra: ' +
+      servico
+    );
+
+    return null;
+  }
+
+  const proximaDataServico = dataServicoForcada
+    ? new Date(dataServicoForcada)
+    : new Date(dataRetorno);
+
+  const nomeAbaDestino = obterNomeMes(
+    proximaDataServico
+  );
+
+  let abaDestino = planilha.getSheetByName(
+    nomeAbaDestino
+  );
+
+
+  // ------------------------------------------------------------------------
+  // Criar aba do mês caso ainda não exista
+  // ------------------------------------------------------------------------
+  if (!abaDestino) {
+
+    abaDestino = criarAbaMensal(
+      nomeAbaDestino,
+      abaOrigem
+    );
+  }
+
+
+  // ------------------------------------------------------------------------
+  // Evitar duplicação
+  // ------------------------------------------------------------------------
+  if (
+    recorrenciaJaExiste(
+      abaDestino,
+      nome,
+      telefone,
+      servico,
+      proximaDataServico
+    )
+  ) {
+
+    exibirMensagemRecorrencia(
+      'Essa recorrência já existe na aba "' +
+      nomeAbaDestino +
+      '".',
+      silencioso
+    );
+
+    return null;
+  }
+
+
+  // ------------------------------------------------------------------------
+  // Preparar nova linha
+  // ------------------------------------------------------------------------
+  const novaLinha = [...dadosLinha];
+
+  // Data Serviço da nova linha = Data Retorno anterior.
+  novaLinha[indice['Data Serviço'] - 1] =
+    proximaDataServico;
+
+  // Calcular novo retorno.
+  novaLinha[indice['Data Retorno'] - 1] =
+    adicionarMesesSeguro(
+      proximaDataServico,
+      meses
+    );
+
+
+  // Limpar campos operacionais.
+  if (indice['Status']) {
+    novaLinha[indice['Status'] - 1] =
+      statusManualInicial || '';
+  }
+
+  if (indice['Status Automático']) {
+    novaLinha[indice['Status Automático'] - 1] =
+      statusAutomaticoInicial || '🟡 A CONFIRMAR';
+  }
+
+  if (indice['Observação']) {
+    novaLinha[indice['Observação'] - 1] = '';
+  }
+
+  if (indice['Data Reagendamento']) {
+    novaLinha[indice['Data Reagendamento'] - 1] =
+      dataServicoForcada || '';
+  }
+
+  // ------------------------------------------------------------------------
+  // Inserir registro
+  // ------------------------------------------------------------------------
+  abaDestino.appendRow(novaLinha);
+
+  const novaLinhaNumero = abaDestino.getLastRow();
+
+  pintarLinhaConformeStatus(
+    abaDestino,
+    novaLinhaNumero,
+    novaLinha[indice['Status Automático'] - 1]
+  );
+
+  // Preserva o hyperlink, a fórmula ou o rich text da coluna Agendar.
+  // Isso mantém o acesso à agenda compartilhada em cada recorrência criada.
+  if (indice['Agendar']) {
+
+    abaOrigem
+      .getRange(linhaOrigem, indice['Agendar'])
+      .copyTo(
+        abaDestino.getRange(
+          novaLinhaNumero,
+          indice['Agendar']
+        ),
+        SpreadsheetApp.CopyPasteType.PASTE_NORMAL,
+        false
+      );
+  }
+
+  // Recria o link para usar os dados e a data da nova linha, incluindo o
+  // endereço no campo Local do Google Agenda.
+  atualizarLinkAgendarLinha(abaDestino, novaLinhaNumero);
+
+  abaDestino
+    .getRange(
+      novaLinhaNumero,
+      indice['Data Serviço']
+    )
+    .setNumberFormat('dd/MM/yyyy');
+
+  abaDestino
+    .getRange(
+      novaLinhaNumero,
+      indice['Data Retorno']
+    )
+    .setNumberFormat('dd/MM/yyyy');
+
+  exibirMensagemRecorrencia(
+    'Próxima recorrência criada!\n\n' +
+    'Cliente: ' + nome + '\n' +
+    'Serviço: ' + servico + '\n' +
+    'Próxima data: ' +
+    Utilities.formatDate(
+      proximaDataServico,
+      TIMEZONE,
+      'dd/MM/yyyy'
+    ) +
+    '\nAba: ' +
+    nomeAbaDestino,
+    silencioso
+  );
+
+  return {
+    aba: abaDestino,
+    linha: novaLinhaNumero
+  };
+}
+
+
+function exibirMensagemRecorrencia(mensagem, silencioso) {
+
+  if (silencioso) {
+
+    Logger.log(mensagem);
+
+    return;
+  }
+
+  SpreadsheetApp
+    .getUi()
+    .alert(mensagem);
+}
+
+
+// ============================================================================
+// 12. PLANEJAR RECORRÊNCIAS FUTURAS
+// ============================================================================
+//
+// Garante que cada serviço tenha registros projetados de julho de 2026
+// até janeiro de 2027.
+// A verificação de duplicidade impede que a mesma
+// recorrência seja criada duas vezes, mesmo quando esta função roda diariamente.
+//
+function planejarRecorrenciasFuturas() {
+
+  const inicio = zerarHorario(
+    new Date(INICIO_PLANEJAMENTO)
+  );
+
+  const limite = zerarHorario(
+    new Date(LIMITE_PLANEJAMENTO)
+  );
+
+  const pendentes = [];
+
+  obterAbasMensais().forEach(function(aba) {
+
+    const indice = obterIndicesCabecalho(aba);
+
+    if (
+      aba.getLastRow() <= 1 ||
+      !indice['Data Retorno']
+    ) {
+
+      return;
+    }
+
+    for (let linha = 2; linha <= aba.getLastRow(); linha++) {
+
+      pendentes.push({
+        aba: aba,
+        linha: linha
+      });
+    }
+  });
+
+  let criadas = 0;
+
+  for (let posicao = 0; posicao < pendentes.length; posicao++) {
+
+    const item = pendentes[posicao];
+    const indice = obterIndicesCabecalho(item.aba);
+
+    const dataRetorno = item.aba
+      .getRange(item.linha, indice['Data Retorno'])
+      .getValue();
+
+    const retorno = zerarHorario(new Date(dataRetorno));
+
+    if (
+      isNaN(retorno.getTime()) ||
+      retorno < inicio ||
+      retorno > limite
+    ) {
+
+      continue;
+    }
+
+    const novaRecorrencia = criarProximaRecorrencia(
+      item.aba,
+      item.linha,
+      true
+    );
+
+    if (novaRecorrencia) {
+
+      pendentes.push(novaRecorrencia);
+
+      criadas++;
+    }
+  }
+
+  return criadas;
+}
+
+
+// ============================================================================
+// 13. GERAR PLANEJAMENTO INICIAL
+// ============================================================================
+//
+// Mantida apenas para preparar a estrutura. As recorrências agora são criadas
+// somente quando uma linha recebe o Status "Agendado".
+//
+function gerarPlanejamentoInicial() {
+
+  prepararEstrutura();
+
+  Logger.log(
+    'Estrutura verificada. ' +
+    'Nenhuma recorrência foi criada automaticamente.'
+  );
+
+  return 0;
+}
+
+
+// ============================================================================
+// 14. CORRIGIR DATAS DE RETORNO JÁ GERADAS
+// ============================================================================
+//
+// Corrige somente linhas cuja Data Retorno está vazia ou igual à Data Serviço.
+// Use uma vez após cadastrar novos aliases de serviços.
+//
+function corrigirDatasRetornoExistentes() {
+
+  let corrigidas = 0;
+  let ignoradas = 0;
+
+  obterAbasMensais().forEach(function(aba) {
+
+    if (aba.getLastRow() <= 1) return;
+
+    const indice = obterIndicesCabecalho(aba);
+
+    if (
+      !indice['Serviço'] ||
+      !indice['Data Serviço'] ||
+      !indice['Data Retorno']
+    ) {
+
+      return;
+    }
+
+    const totalLinhas = aba.getLastRow() - 1;
+
+    const dados = aba
+      .getRange(
+        2,
+        1,
+        totalLinhas,
+        aba.getLastColumn()
+      )
+      .getValues();
+
+    const novosRetornos = dados.map(function(linha) {
+
+      const servico = linha[indice['Serviço'] - 1];
+      const dataServico = linha[indice['Data Serviço'] - 1];
+      const dataRetorno = linha[indice['Data Retorno'] - 1];
+      const meses = buscarRecorrenciaServico(servico);
+
+      const dataServicoObj = new Date(dataServico);
+      const dataRetornoObj = new Date(dataRetorno);
+
+      const precisaCorrigir =
+        dataServico &&
+        meses &&
+        (
+          !dataRetorno ||
+          formatarDataChave(dataServicoObj) ===
+            formatarDataChave(dataRetornoObj)
+        );
+
+      if (precisaCorrigir) {
+
+        corrigidas++;
+
+        return [
+          adicionarMesesSeguro(dataServicoObj, meses)
+        ];
+      }
+
+      if (servico && !meses) {
+
+        ignoradas++;
+      }
+
+      return [dataRetorno];
+    });
+
+    aba
+      .getRange(
+        2,
+        indice['Data Retorno'],
+        totalLinhas,
+        1
+      )
+      .setValues(novosRetornos)
+      .setNumberFormat('dd/MM/yyyy');
+  });
+
+  Logger.log(
+    'Datas corrigidas: ' +
+    corrigidas +
+    '. Serviços sem regra: ' +
+    ignoradas
+  );
+
+  return {
+    corrigidas: corrigidas,
+    ignoradas: ignoradas
+  };
+}
+
+
+// ============================================================================
+// 12. VERIFICAR DUPLICIDADE
+// ============================================================================
+
+function recorrenciaJaExiste(
+  aba,
+  nome,
+  telefone,
+  servico,
+  dataServico
+) {
+
+  if (aba.getLastRow() <= 1) return false;
+
+  const indice = obterIndicesCabecalho(aba);
+
+  const dados = aba
+    .getRange(
+      2,
+      1,
+      aba.getLastRow() - 1,
+      aba.getLastColumn()
+    )
+    .getValues();
+
+  const dataComparacao = formatarDataChave(
+    dataServico
+  );
+
+  return dados.some(function(linha) {
+
+    const nomeLinha =
+      linha[indice['Nome'] - 1];
+
+    const telefoneLinha =
+      linha[indice['Telefone'] - 1];
+
+    const servicoLinha =
+      linha[indice['Serviço'] - 1];
+
+    const dataLinha =
+      linha[indice['Data Serviço'] - 1];
+
+    return (
+      normalizarTexto(nomeLinha) ===
+        normalizarTexto(nome) &&
+
+      normalizarTelefone(telefoneLinha) ===
+        normalizarTelefone(telefone) &&
+
+      normalizarTexto(servicoLinha) ===
+        normalizarTexto(servico) &&
+
+      formatarDataChave(dataLinha) ===
+        dataComparacao
+    );
+  });
+}
+
+
+// ============================================================================
+// 13. CRIAR ABA MENSAL
+// ============================================================================
+
+function criarAbaMensal(nomeAba, abaModelo) {
+
+  const planilha = SpreadsheetApp.getActive();
+
+  const modelo =
+    planilha.getSheetByName(ABA_MODELO_MENSAL) ||
+    abaModelo;
+
+  // Clona a aba Julho completa para preservar dropdowns, links, validações,
+  // regras condicionais, cores, larguras e demais configurações.
+  const novaAba = modelo.copyTo(planilha);
+
+  novaAba.setName(nomeAba);
+
+  // Remove somente os dados de clientes copiados do modelo. A estrutura e as
+  // regras da aba permanecem exatamente como na aba Julho.
+  if (novaAba.getLastRow() > 1) {
+
+    novaAba
+      .getRange(
+        2,
+        1,
+        novaAba.getLastRow() - 1,
+        novaAba.getLastColumn()
+      )
+      .clearContent();
+  }
+
+  // Garante que abas criadas no futuro tenham os dois dropdowns e as cores
+  // atuais, mesmo que a aba modelo seja mais antiga.
+  garantirColunaDataReagendamento();
+  configurarMenuStatusDaAba(novaAba);
+  aplicarFormatacaoStatusNaAba(novaAba);
+
+  return novaAba;
+}
+
+
+// ============================================================================
+// 13.1 ORDENAR ABAS MENSAIS POR DATA DE SERVIÇO
+// ============================================================================
+//
+// Ordena apenas os registros, mantendo o cabeçalho, os links, as fórmulas,
+// as validações e a formatação de cada linha.
+//
+function ordenarAbaMensalPorDataServico(aba) {
+
+  if (!aba || aba.getLastRow() <= 2) return;
+
+  const indice = obterIndicesCabecalho(aba);
+  const colunaDataServico = indice['Data Serviço'];
+
+  if (!colunaDataServico) return;
+
+  aba
+    .getRange(
+      2,
+      1,
+      aba.getLastRow() - 1,
+      aba.getLastColumn()
+    )
+    .sort({
+      column: colunaDataServico,
+      ascending: true
+    });
+}
+
+
+function ordenarTodasAbasMensaisPorDataServico() {
+
+  obterAbasMensais().forEach(function(aba) {
+    ordenarAbaMensalPorDataServico(aba);
+  });
+}
+
+
+// ============================================================================
+// 14. NOME DO MÊS
+// ============================================================================
+
+function obterNomeMes(data) {
+
+  const meses = [
+    'Janeiro',
+    'Fevereiro',
+    'Março',
+    'Abril',
+    'Maio',
+    'Junho',
+    'Julho',
+    'Agosto',
+    'Setembro',
+    'Outubro',
+    'Novembro',
+    'Dezembro'
+  ];
+
+  return (
+    meses[data.getMonth()] +
+    ' ' +
+    data.getFullYear()
+  );
+}
+
+
+// ============================================================================
+// 15. PREPARAR ESTRUTURA
+// ============================================================================
+
+function prepararEstrutura() {
+
+  const planilha = SpreadsheetApp.getActive();
+
+
+  // ------------------------------------------------------------------------
+  // FILA WHATSAPP
+  // ------------------------------------------------------------------------
+  let fila = planilha.getSheetByName(
+    ABA_FILA
+  );
+
+  if (!fila) {
+
+    fila = planilha.insertSheet(ABA_FILA);
+
+    fila.appendRow([
+      'Cliente',
+      'Telefone',
+      'Serviço',
+      'Data de Retorno',
+      'Dias Restantes',
+      'Status',
+      'Mensagem',
+      'Link WhatsApp',
+      'Enviado?',
+      'Data Envio'
+    ]);
+
+    fila.setFrozenRows(1);
+
+    fila
+      .getRange('A1:J1')
+      .setBackground('#4CAF50')
+      .setFontColor('white')
+      .setFontWeight('bold');
+  }
+
+
+  // ------------------------------------------------------------------------
+  // PAINEL
+  // ------------------------------------------------------------------------
+  let painel = planilha.getSheetByName(
+    ABA_PAINEL
+  );
+
+  if (!painel) {
+
+    painel = planilha.insertSheet(
+      ABA_PAINEL
+    );
+
+    painel.appendRow([
+      'PAINEL DE RECORRÊNCIA'
+    ]);
+
+    painel
+      .getRange('A1')
+      .setBackground('#2E7D32')
+      .setFontColor('white')
+      .setFontWeight('bold')
+      .setFontSize(16);
+
+    painel.appendRow([
+      'Última Atualização',
+      'Status'
+    ]);
+
+    painel.appendRow([
+      'Serviços atrasados',
+      'Vencem em até 7 dias',
+      'Vencem entre 8 e 15 dias',
+      'Total de serviços na fila'
+    ]);
+
+    painel.appendRow([]);
+
+    painel.appendRow([
+      'Cliente',
+      'Telefone',
+      'Serviço',
+      'Data Retorno',
+      'Dias',
+      'Status'
+    ]);
+
+    painel
+      .getRange('A5:F5')
+      .setBackground('#4CAF50')
+      .setFontColor('white')
+      .setFontWeight('bold');
+
+    painel.setFrozenRows(5);
+  }
+
+  garantirColunaDataReagendamento();
+}
+
+
+// Cria a coluna ao lado de Agendar, preservando os dados e a formatação já
+// existentes nas abas mensais.
+function garantirColunaDataReagendamento() {
+
+  obterAbasMensais().forEach(function(aba) {
+
+    const indice = obterIndicesCabecalho(aba);
+
+    let colunaNova = indice['Data Reagendamento'];
+
+    if (!colunaNova) {
+
+      const colunaAgendar = indice['Agendar'];
+
+      if (!colunaAgendar) return;
+
+      aba.insertColumnAfter(colunaAgendar);
+      colunaNova = colunaAgendar + 1;
+
+      aba
+        .getRange(1, colunaAgendar, aba.getMaxRows(), 1)
+        .copyTo(
+          aba.getRange(1, colunaNova, aba.getMaxRows(), 1),
+          SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+          false
+        );
+
+      aba
+        .getRange(1, colunaNova)
+        .setValue('Data Reagendamento');
+
+      aba.setColumnWidth(colunaNova, 145);
+    }
+
+    const linhasParaFormatar = Math.max(1, aba.getMaxRows());
+
+    const regraData = SpreadsheetApp
+      .newDataValidation()
+      .requireDate()
+      .setAllowInvalid(false)
+      .setHelpText(
+        'Escolha no calendário a nova data combinada com o cliente.'
+      )
+      .build();
+
+    aba
+      .getRange(2, colunaNova, linhasParaFormatar - 1, 1)
+      .clearDataValidations()
+      .setDataValidation(regraData)
+      .setNumberFormat('dd/MM/yyyy');
+
+    aba.setColumnWidth(colunaNova, 145);
+  });
+}
+
+
+// ============================================================================
+// 16. LIMPAR DADOS ANTIGOS
+// ============================================================================
+
+function limparDadosAntigos() {
+
+  const planilha = SpreadsheetApp.getActive();
+
+  const fila = planilha.getSheetByName(
+    ABA_FILA
+  );
+
+  if (fila && fila.getLastRow() > 1) {
+
+    fila
+      .getRange(
+        2,
+        1,
+        fila.getLastRow() - 1,
+        fila.getLastColumn()
+      )
+      .clearContent();
+  }
+
+
+  const painel = planilha.getSheetByName(
+    ABA_PAINEL
+  );
+
+  if (painel && painel.getLastRow() > 5) {
+
+    painel
+      .getRange(
+        6,
+        1,
+        painel.getLastRow() - 5,
+        painel.getLastColumn()
+      )
+      .clearContent();
+  }
+}
+
+
+// ============================================================================
+// 17. PROCESSAR SERVIÇOS
+// ============================================================================
+
+function processarServicos() {
+
+  const planilha = SpreadsheetApp.getActive();
+
+  const fila = planilha.getSheetByName(
+    ABA_FILA
+  );
+
+  const painel = planilha.getSheetByName(
+    ABA_PAINEL
+  );
+
+  const hoje = zerarHorario(new Date());
+
+  let totalAtrasados = 0;
+  let totalProximos = 0;
+  let totalAVencer = 0;
+  let totalContatos = 0;
+
+  const clientesProcessados = new Set();
+
+
+  obterAbasMensais().forEach(function(aba) {
+
+    if (aba.getLastRow() <= 1) return;
+
+    const indice =
+      obterIndicesCabecalho(aba);
+
+    const dados = aba
+      .getRange(
+        2,
+        1,
+        aba.getLastRow() - 1,
+        aba.getLastColumn()
+      )
+      .getValues();
+
+
+    dados.forEach(function(linha) {
+
+      const nome =
+        linha[indice['Nome'] - 1];
+
+      const telefoneOriginal =
+        linha[indice['Telefone'] - 1];
+
+      const servico =
+        linha[indice['Serviço'] - 1];
+
+      const dataRetorno =
+        linha[indice['Data Retorno'] - 1];
+
+
+      if (
+        !nome ||
+        !telefoneOriginal ||
+        !dataRetorno
+      ) {
+
+        return;
+      }
+
+
+      const telefone =
+        normalizarTelefone(
+          telefoneOriginal
+        );
+
+      const dataRetornoObj =
+        zerarHorario(
+          new Date(dataRetorno)
+        );
+
+      if (
+        isNaN(dataRetornoObj.getTime())
+      ) {
+
+        return;
+      }
+
+
+      const diffTime =
+        dataRetornoObj.getTime() -
+        hoje.getTime();
+
+      const diffDays =
+        Math.ceil(
+          diffTime /
+          (1000 * 60 * 60 * 24)
+        );
+
+
+      let statusCliente = '';
+
+
+      if (diffDays < 0) {
+
+        statusCliente =
+          '🔴 ATRASADO';
+
+      } else if (diffDays <= 7) {
+
+        statusCliente = diffDays === 0
+          ? '🟡 VENCE HOJE'
+          : '🟡 VENCE EM ' +
+            diffDays +
+            (diffDays === 1 ? ' DIA' : ' DIAS');
+
+      } else if (diffDays <= 15) {
+
+        statusCliente =
+          '🟢 A VENCER EM ' +
+          diffDays +
+          ' DIAS';
+
+      } else {
+
+        return;
+      }
+
+
+      // --------------------------------------------------------------------
+      // Evitar duplicidade no relatório
+      // --------------------------------------------------------------------
+      const chave =
+        telefone +
+        '_' +
+        normalizarTexto(servico) +
+        '_' +
+        formatarDataChave(
+          dataRetornoObj
+        );
+
+      if (
+        clientesProcessados.has(chave)
+      ) {
+
+        return;
+      }
+
+      clientesProcessados.add(chave);
+
+
+      // Os indicadores usam a mesma base da fila: somente registros únicos.
+      if (diffDays < 0) {
+
+        totalAtrasados++;
+
+      } else if (diffDays <= 7) {
+
+        totalProximos++;
+
+      } else {
+
+        totalAVencer++;
+      }
+
+
+      const dataFormatada =
+        Utilities.formatDate(
+          dataRetornoObj,
+          TIMEZONE,
+          'dd/MM/yyyy'
+        );
+
+
+      const mensagem =
+        criarMensagemCliente(
+          nome,
+          servico,
+          dataFormatada
+        );
+
+
+      const linkWhatsApp =
+        'https://wa.me/55' +
+        telefone +
+        '?text=' +
+        encodeURIComponent(mensagem);
+
+
+      fila.appendRow([
+        nome,
+        telefone,
+        servico,
+        dataFormatada,
+        diffDays,
+        statusCliente,
+        mensagem,
+        linkWhatsApp,
+        'NÃO',
+        ''
+      ]);
+
+
+      painel.appendRow([
+        nome,
+        telefone,
+        servico,
+        dataFormatada,
+        diffDays,
+        statusCliente
+      ]);
+
+
+      totalContatos++;
+    });
+  });
+
+
+  painel
+    .getRange('A3:D3')
+    .setValues([[
+      'Serviços atrasados',
+      'Vencem em até 7 dias',
+      'Vencem entre 8 e 15 dias',
+      'Total de serviços na fila'
+    ]]);
+
+  painel
+    .getRange('A4:D4')
+    .setValues([[
+      totalAtrasados,
+      totalProximos,
+      totalAVencer,
+      totalContatos
+    ]]);
+
+
+  ordenarFilaWhatsApp();
+
+  aplicarFormatacaoCondicional();
+
+
+  // Retornar os números permite reutilizá-los
+  // no relatório sem ler a planilha novamente.
+  return {
+    atrasados: totalAtrasados,
+    proximos: totalProximos,
+    aVencer: totalAVencer,
+    contatos: totalContatos
+  };
+}
+
+
+// ============================================================================
+// 18. MENSAGEM PARA O CLIENTE - FILA WHATSAPP
+// ============================================================================
+//
+// IMPORTANTE:
+// Esta função NÃO envia WhatsApp automaticamente.
+// Ela apenas gera a mensagem e o link.
+//
+function criarMensagemCliente(
+  nome,
+  servico,
+  dataRetorno
+) {
+
+  return (
+    'Olá, ' + nome + ',\n\n' +
+
+    'O serviço de ' +
+    servico +
+    ' está próximo do período recomendado ' +
+    'para renovação do certificado de garantia. ' +
+
+    'A data prevista para o retorno é ' +
+    dataRetorno +
+    '.\n\n' +
+
+    'Deseja agendar uma nova visita? ' +
+    'Entre em contato conosco para combinarmos ' +
+    'o melhor dia e horário.\n\n' +
+
+    'Estamos à disposição para garantir que ' +
+    'seu ambiente continue protegido e seguro.\n\n' +
+
+    'Atenciosamente,\n' +
+    'Equipe Fimpra'
+  );
+}
+
+
+// ============================================================================
+// 19. ATUALIZAR PAINEL
+// ============================================================================
+
+function atualizarPainelRecorrencia() {
+
+  const painel =
+    SpreadsheetApp
+      .getActive()
+      .getSheetByName(
+        ABA_PAINEL
+      );
+
+  if (!painel) return;
+
+  painel
+    .getRange('A2')
+    .setValue(
+      Utilities.formatDate(
+        new Date(),
+        TIMEZONE,
+        'dd/MM/yyyy HH:mm'
+      )
+    );
+
+  painel
+    .getRange('B2')
+    .setValue(
+      'Sistema atualizado automaticamente'
+    );
+
+  painel
+    .getRange('A2:B2')
+    .setBackground('#E8F5E9');
+
+  painel
+    .getRange('A3:D3')
+    .setFontWeight('bold')
+    .setBackground('#A5D6A7');
+
+  painel
+    .getRange('A4:D4')
+    .setBackground('#C8E6C9');
+}
+
+
+// ============================================================================
+// 20. RELATÓRIO DIÁRIO INTERNO
+// ============================================================================
+
+function enviarRelatorioDiario(resumo) {
+
+  if (!resumo) return;
+
+  const diaDaSemana = Number(
+    Utilities.formatDate(
+      new Date(),
+      TIMEZONE,
+      'u'
+    )
+  );
+
+  if (diaDaSemana !== DIA_RELATORIO_SEMANAL) {
+
+    Logger.log(
+      'E-mail não enviado: o relatório semanal é enviado somente às segundas-feiras.'
+    );
+
+    return;
+  }
+
+  // Proteção adicional:
+  // evita dois relatórios no mesmo dia mesmo se a função
+  // for executada duas vezes acidentalmente.
+  if (relatorioJaEnviadoHoje()) {
+
+    Logger.log(
+      'Relatório diário já enviado hoje.'
+    );
+
+    return;
+  }
+
+
+  const dataHoje =
+    Utilities.formatDate(
+      new Date(),
+      TIMEZONE,
+      'dd/MM/yyyy'
+    );
+
+
+  const mensagem = criarMensagemRelatorio(
+    resumo,
+    dataHoje
+  );
+
+
+  // ------------------------------------------------------------------------
+  // EMAIL INTERNO
+  // ------------------------------------------------------------------------
+  MailApp.sendEmail({
+    to: EMAIL_RELATORIO,
+    subject:
+      'Relatório diário — Recorrência Fimpra — ' +
+      dataHoje,
+    body: mensagem
+  });
+
+
+  // ------------------------------------------------------------------------
+  // WHATSAPP DA EMPRESA
+  // ------------------------------------------------------------------------
+  //
+  // Apps Script não envia automaticamente pelo WhatsApp.
+  //
+  // Geramos um link com a mensagem pronta.
+  // O link ficará disponível na aba Painel.
+  //
+  atualizarLinkRelatorioWhatsApp(mensagem);
+
+
+  marcarRelatorioComoEnviadoHoje();
+}
+
+
+// ============================================================================
+// 21. LINK WHATSAPP DA EMPRESA
+// ============================================================================
+
+function gerarLinkWhatsAppEmpresa(
+  mensagem
+) {
+
+  const telefone =
+    normalizarTelefone(
+      WHATSAPP_EMPRESA
+    );
+
+  return (
+    'https://wa.me/55' +
+    telefone +
+    '?text=' +
+    encodeURIComponent(mensagem)
+  );
+}
+
+
+// ============================================================================
+// 22. CONTROLE DO RELATÓRIO DIÁRIO
+// ============================================================================
+//
+// PropertiesService guarda internamente a última data
+// em que o relatório foi enviado.
+//
+// Assim, mesmo que a função execute duas vezes,
+// o e-mail continua sendo enviado apenas uma vez.
+//
+function relatorioJaEnviadoHoje() {
+
+  const propriedades =
+    PropertiesService
+      .getScriptProperties();
+
+  const ultimaData =
+    propriedades.getProperty(
+      'ULTIMO_RELATORIO'
+    );
+
+  const hoje =
+    Utilities.formatDate(
+      new Date(),
+      TIMEZONE,
+      'yyyy-MM-dd'
+    );
+
+  return ultimaData === hoje;
+}
+
+
+function marcarRelatorioComoEnviadoHoje() {
+
+  const hoje =
+    Utilities.formatDate(
+      new Date(),
+      TIMEZONE,
+      'yyyy-MM-dd'
+    );
+
+  PropertiesService
+    .getScriptProperties()
+    .setProperty(
+      'ULTIMO_RELATORIO',
+      hoje
+    );
+}
+
+
+// ============================================================================
+// 23. GATILHO DE ATUALIZAÇÃO DIÁRIA
+// ============================================================================
+
+function criarGatilhoDiario() {
+
+  const gatilhos =
+    ScriptApp.getProjectTriggers();
+
+
+  // Remover gatilhos antigos da mesma função.
+  // Isso garante que exista apenas UM.
+  gatilhos.forEach(function(gatilho) {
+
+    if (
+      gatilho.getHandlerFunction() ===
+      'executarAutomacaoCompleta'
+    ) {
+
+      ScriptApp.deleteTrigger(
+        gatilho
+      );
+    }
+  });
+
+
+  // Apps Script executa aproximadamente dentro
+  // da faixa correspondente à hora configurada.
+  ScriptApp
+    .newTrigger(
+      'executarAutomacaoCompleta'
+    )
+    .timeBased()
+    .everyDays(1)
+    .atHour(HORA_RELATORIO)
+    .create();
+
+
+  Logger.log(
+    'Gatilho diário de atualização criado para aproximadamente ' +
+    HORA_RELATORIO +
+    'h. O e-mail será enviado somente às segundas-feiras.'
+  );
+}
+
+
+// ============================================================================
+// 24. ORDENAR FILA WHATSAPP
+// ============================================================================
+
+function ordenarFilaWhatsApp() {
+
+  const fila =
+    SpreadsheetApp
+      .getActive()
+      .getSheetByName(
+        ABA_FILA
+      );
+
+  if (
+    !fila ||
+    fila.getLastRow() <= 1
+  ) {
+
+    return;
+  }
+
+
+  const dados =
+    fila
+      .getRange(
+        2,
+        1,
+        fila.getLastRow() - 1,
+        fila.getLastColumn()
+      )
+      .getValues();
+
+
+  dados.sort(function(a, b) {
+
+    function prioridade(status) {
+
+      status = String(status);
+
+      if (status.includes('🔴')) {
+        return 1;
+      }
+
+      if (status.includes('🟡')) {
+        return 2;
+      }
+
+      return 3;
+    }
+
+    return (
+      prioridade(a[5]) -
+      prioridade(b[5])
+    );
+  });
+
+
+  fila
+    .getRange(
+      2,
+      1,
+      dados.length,
+      dados[0].length
+    )
+    .setValues(dados);
+}
+
+
+// ============================================================================
+// 25. FORMATAÇÃO CONDICIONAL
+// ============================================================================
+
+function aplicarFormatacaoCondicional() {
+
+  const planilha =
+    SpreadsheetApp.getActive();
+
+  const fila =
+    planilha.getSheetByName(
+      ABA_FILA
+    );
+
+  const painel =
+    planilha.getSheetByName(
+      ABA_PAINEL
+    );
+
+
+  if (fila) {
+
+    fila.clearConditionalFormatRules();
+
+    if (fila.getLastRow() > 1) {
+
+      const intervalo =
+        fila.getRange(
+          2,
+          1,
+          fila.getLastRow() - 1,
+          fila.getLastColumn()
+        );
+
+
+      const atrasado =
+        SpreadsheetApp
+          .newConditionalFormatRule()
+          .whenTextContains('🔴')
+          .setBackground('#FFEBEE')
+          .setFontColor('#D32F2F')
+          .setRanges([intervalo])
+          .build();
+
+
+      const proximo =
+        SpreadsheetApp
+          .newConditionalFormatRule()
+          .whenTextContains('🟡')
+          .setBackground('#FFF8E1')
+          .setFontColor('#F57C00')
+          .setRanges([intervalo])
+          .build();
+
+
+      const agendado =
+        SpreadsheetApp
+          .newConditionalFormatRule()
+          .whenTextContains('🟢')
+          .setBackground('#E8F5E9')
+          .setFontColor('#388E3C')
+          .setRanges([intervalo])
+          .build();
+
+
+      fila.setConditionalFormatRules([
+        atrasado,
+        proximo,
+        agendado
+      ]);
+    }
+  }
+
+
+  if (
+    painel &&
+    painel.getLastRow() > 5
+  ) {
+
+    painel.clearConditionalFormatRules();
+
+    const intervalo =
+      painel.getRange(
+        6,
+        1,
+        painel.getLastRow() - 5,
+        6
+      );
+
+
+    const atrasado =
+      SpreadsheetApp
+        .newConditionalFormatRule()
+        .whenTextContains('🔴')
+        .setBackground('#FFEBEE')
+        .setFontColor('#D32F2F')
+        .setRanges([intervalo])
+        .build();
+
+
+    const proximo =
+      SpreadsheetApp
+        .newConditionalFormatRule()
+        .whenTextContains('🟡')
+        .setBackground('#FFF8E1')
+        .setFontColor('#F57C00')
+        .setRanges([intervalo])
+        .build();
+
+
+    const agendado =
+      SpreadsheetApp
+        .newConditionalFormatRule()
+        .whenTextContains('🟢')
+        .setBackground('#E8F5E9')
+        .setFontColor('#388E3C')
+        .setRanges([intervalo])
+        .build();
+
+
+    painel.setConditionalFormatRules([
+      atrasado,
+      proximo,
+      agendado
+    ]);
+  }
+}
+
+
+// ============================================================================
+// 26. MARCAR WHATSAPP COMO ENVIADO
+// ============================================================================
+
+function marcarComoEnviado() {
+
+  const planilha =
+    SpreadsheetApp.getActive();
+
+  const aba =
+    planilha.getActiveSheet();
+
+
+  if (
+    aba.getName() !== ABA_FILA
+  ) {
+
+    SpreadsheetApp
+      .getUi()
+      .alert(
+        'Selecione uma linha na aba "' +
+        ABA_FILA +
+        '".'
+      );
+
+    return;
+  }
+
+
+  const linha =
+    aba.getActiveCell().getRow();
+
+
+  if (linha < 2) {
+
+    SpreadsheetApp
+      .getUi()
+      .alert(
+        'Selecione uma linha com dados.'
+      );
+
+    return;
+  }
+
+
+  aba
+    .getRange(linha, 9)
+    .setValue('SIM');
+
+
+  aba
+    .getRange(linha, 10)
+    .setValue(
+      Utilities.formatDate(
+        new Date(),
+        TIMEZONE,
+        'dd/MM/yyyy HH:mm'
+      )
+    );
+
+
+  SpreadsheetApp
+    .getUi()
+    .alert(
+      'Contato marcado como enviado.'
+    );
+}
+
+
+// ============================================================================
+// 27. FUNÇÕES AUXILIARES
+// ============================================================================
+
+function obterAbasMensais() {
+
+  return SpreadsheetApp
+    .getActive()
+    .getSheets()
+    .filter(function(aba) {
+
+      return ehAbaMensal(aba);
+    });
+}
+
+
+function ehAbaMensal(aba) {
+
+  if (
+    ABAS_IGNORADAS.includes(
+      aba.getName()
+    )
+  ) {
+
+    return false;
+  }
+
+
+  if (
+    aba.getLastColumn() === 0
+  ) {
+
+    return false;
+  }
+
+
+  const cabecalhos =
+    aba
+      .getRange(
+        1,
+        1,
+        1,
+        aba.getLastColumn()
+      )
+      .getValues()[0];
+
+
+  return (
+    cabecalhos.includes('Nome') &&
+    cabecalhos.includes('Telefone') &&
+    cabecalhos.includes('Serviço') &&
+    cabecalhos.includes('Data Serviço') &&
+    cabecalhos.includes('Data Retorno')
+  );
+}
+
+
+function obterIndicesCabecalho(aba) {
+
+  const cabecalhos =
+    aba
+      .getRange(
+        1,
+        1,
+        1,
+        aba.getLastColumn()
+      )
+      .getValues()[0];
+
+
+  const indice = {};
+
+
+  cabecalhos.forEach(
+    function(nome, posicao) {
+
+      indice[
+        String(nome).trim()
+      ] = posicao + 1;
+    }
+  );
+
+
+  return indice;
+}
+
+
+function encontrarColuna(
+  aba,
+  nomeColuna
+) {
+
+  const indice =
+    obterIndicesCabecalho(aba);
+
+  return indice[nomeColuna] || null;
+}
+
+
+function normalizarTexto(texto) {
+
+  return String(texto || '')
+    .normalize('NFD')
+    .replace(
+      /[\u0300-\u036f]/g,
+      ''
+    )
+    .trim()
+    .toLowerCase();
+}
+
+
+function normalizarTelefone(
+  telefone
+) {
+
+  return String(
+    telefone || ''
+  ).replace(/\D/g, '');
+}
+
+
+function formatarDataChave(data) {
+
+  const objeto =
+    new Date(data);
+
+  if (
+    isNaN(objeto.getTime())
+  ) {
+
+    return '';
+  }
+
+  return Utilities.formatDate(
+    objeto,
+    TIMEZONE,
+    'yyyy-MM-dd'
+  );
+}
+
+
+function zerarHorario(data) {
+
+  const novaData =
+    new Date(data);
+
+  novaData.setHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+  return novaData;
+}
+
+
+// ============================================================================
+// 28. TESTES MANUAIS
+// ============================================================================
+//
+// Use esta função para testar a automação sem esperar até 08:00.
+//
+// ATENÇÃO:
+// O relatório possui proteção contra envio duplicado.
+//
+function testeManual() {
+
+  executarAutomacaoCompleta();
+
+  SpreadsheetApp
+    .getUi()
+    .alert(
+      'Teste manual concluído.'
+    );
+}
+
+
+// ============================================================================
+// 29. TESTAR SOMENTE O E-MAIL
+// ============================================================================
+
+function testarEmail() {
+
+  MailApp.sendEmail({
+    to: EMAIL_RELATORIO,
+    subject:
+      'Teste — Automação Fimpra',
+    body:
+      'Teste de funcionamento do relatório interno da automação Fimpra.'
+  });
+
+  SpreadsheetApp
+    .getUi()
+    .alert(
+      'E-mail de teste enviado para:\n' +
+      EMAIL_RELATORIO
+    );
+}
+
+
+// ============================================================================
+// 30. TESTAR LINK WHATSAPP
+// ============================================================================
+
+function testarWhatsAppEmpresa() {
+
+  const mensagem =
+    'Teste da automação Fimpra.\n\n' +
+    'Se esta mensagem apareceu corretamente, ' +
+    'o relatório interno para WhatsApp está configurado.';
+
+
+  const link =
+    gerarLinkWhatsAppEmpresa(
+      mensagem
+    );
+
+
+  const painel =
+    SpreadsheetApp
+      .getActive()
+      .getSheetByName(
+        ABA_PAINEL
+      );
+
+
+  if (!painel) {
+
+    SpreadsheetApp
+      .getUi()
+      .alert(
+        'Execute configurarSistema() primeiro.'
+      );
+
+    return;
+  }
+
+
+  painel
+    .getRange('H1')
+    .setValue(
+      'Teste WhatsApp'
+    );
+
+
+  painel
+    .getRange('H2')
+    .setFormula(
+      '=HYPERLINK("' +
+      link +
+      '";"📲 Abrir WhatsApp")'
+    );
+
+
+  SpreadsheetApp
+    .getUi()
+    .alert(
+      'Link criado na aba "' +
+      ABA_PAINEL +
+      '", célula H2.'
+    );
+}
+
+
+// ============================================================================
+// 31. RESET DO CONTROLE DE RELATÓRIO
+// ============================================================================
+//
+// SOMENTE PARA TESTES.
+//
+// Permite testar novamente o envio do relatório no mesmo dia.
+//
+function liberarNovoTesteRelatorio() {
+
+  PropertiesService
+    .getScriptProperties()
+    .deleteProperty(
+      'ULTIMO_RELATORIO'
+    );
+
+
+  SpreadsheetApp
+    .getUi()
+    .alert(
+      'Controle do relatório diário resetado.'
+    );
+}
+
+
+// ============================================================================
+// 32. REMOVER GATILHOS
+// ============================================================================
+//
+// Função administrativa.
+// Use somente quando precisar reinstalar/reconfigurar os gatilhos.
+//
+function limparGatilhos() {
+
+  const gatilhos =
+    ScriptApp.getProjectTriggers();
+
+
+  gatilhos.forEach(
+    function(gatilho) {
+
+      ScriptApp.deleteTrigger(
+        gatilho
+      );
+    }
+  );
+
+
+  SpreadsheetApp
+    .getUi()
+    .alert(
+      'Todos os gatilhos foram removidos.'
+    );
+}
+
+
+function criarMensagemRelatorio(resumo, dataHoje) {
+
+  return (
+    'RELATÓRIO DIÁRIO — FIMPRA\n\n' +
+
+    'Data: ' +
+    dataHoje +
+    '\n\n' +
+
+    '🔴 Atrasados: ' +
+    resumo.atrasados +
+    '\n' +
+
+    '🟡 Vencem em até 7 dias: ' +
+    resumo.proximos +
+    '\n' +
+
+    '🟢 Vencem entre 8 e 15 dias: ' +
+    resumo.aVencer +
+    '\n' +
+
+    '📋 Total de serviços na fila: ' +
+    resumo.contatos +
+    '\n\n' +
+
+    'Total conferido: atrasados + vencimentos em até 15 dias.\n' +
+    'Registros repetidos de telefone, serviço e data foram removidos.\n\n' +
+    'Consulte a aba "Fila WhatsApp" para realizar os contatos.'
+  );
+}
+
+
+function atualizarLinkRelatorioWhatsApp(mensagem) {
+
+  const painel =
+    SpreadsheetApp
+      .getActive()
+      .getSheetByName(ABA_PAINEL);
+
+  if (!painel) return null;
+
+  const linkWhatsApp =
+    gerarLinkWhatsAppEmpresa(mensagem);
+
+  painel
+    .getRange('H1')
+    .setValue('Relatório WhatsApp')
+    .setFontWeight('bold');
+
+  painel
+    .getRange('H2')
+    .setFormula(
+      '=HYPERLINK("' +
+      linkWhatsApp +
+      '";"📲 Enviar relatório pelo WhatsApp")'
+    );
+
+  return linkWhatsApp;
+}
+
+
+// Gera o link com o mesmo texto do e-mail, mas não envia e-mail.
+function gerarLinkRelatorioWhatsApp() {
+
+  prepararEstrutura();
+
+  limparDadosAntigos();
+
+  ordenarTodasAbasMensaisPorDataServico();
+
+  const resumo = processarServicos();
+
+  atualizarPainelRecorrencia();
+
+  const dataHoje =
+    Utilities.formatDate(
+      new Date(),
+      TIMEZONE,
+      'dd/MM/yyyy'
+    );
+
+  const mensagem = criarMensagemRelatorio(
+    resumo,
+    dataHoje
+  );
+
+  const link = atualizarLinkRelatorioWhatsApp(mensagem);
+
+  Logger.log('Link do relatório WhatsApp atualizado.');
+
+  return link;
+}
