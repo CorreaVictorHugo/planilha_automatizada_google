@@ -1,2 +1,6 @@
 ﻿node_modules/
-.DS_Store
+
+# Dados de clientes
+*.xlsx
+*.csv
+inspecao_recorrencia/
