@@ -98,9 +98,7 @@ Para detalhes completos, consulte:
 ## 📞 Suporte
 
 **Victor Hugo - Desenvolvedor**
-- 📧 E-mail: (seu email)
-- 📱 WhatsApp: (seu telefone)
-- ⏰ Horário: Seg-Sex, 8h-18h
+- 📧 E-mail: (correavhc@gmail.com)
 
 ---
 
