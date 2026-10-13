@@ -20,11 +20,11 @@ planilha_recorrencoa_autmotizada/
 
 ## 🎯 O que este sistema faz
 
-✅ **Identifica automaticamente** serviços atrasados ou próximos de vencer
-✅ **Cria uma fila organizada** para contato via WhatsApp  
-✅ **Gera um painel consolidado** com estatísticas atualizadas
-✅ **Atualiza diariamente** sem necessidade de intervenção manual
-✅ **Evita duplicatas** - cada cliente aparece apenas uma vez
+✅ **Identifica automaticamente** serviços atrasados ou próximos de vencer\
+✅ **Cria uma fila organizada** para contato via WhatsApp\
+✅ **Gera um painel consolidado** com estatísticas atualizadas\
+✅ **Atualiza diariamente** sem necessidade de intervenção manual\
+✅ **Evita duplicatas** - cada cliente aparece apenas uma vez\
 ✅ **Prioriza automaticamente** - atrasados aparecem primeiro
 
 ---
