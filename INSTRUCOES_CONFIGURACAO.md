@@ -36,7 +36,7 @@ Este sistema automatizado foi criado para gerenciar os serviços de dedetizaçã
    - Na planilha, clique em **Extensões > Apps Script**
 
 2. **Cole o código**:
-   - Copie todo o conteúdo do arquivo `automacao_completa.js`
+   - Copie todo o conteúdo do arquivo `Codigo_pronto_para_colar.gs`
    - Cole no editor de scripts (substitua qualquer código existente)
 
 3. **Salve o projeto**:
@@ -46,9 +46,9 @@ Este sistema automatizado foi criado para gerenciar os serviços de dedetizaçã
 ### 3. Executar pela Primeira Vez
 
 1. **Execute manualmente**:
-   - No editor de scripts, selecione a função `testeManual` no menu dropdown
+   - No editor de scripts, selecione a função `configurarSistema` no menu dropdown
    - Clique no botão ▶️ **Executar**
-   - Na primeira execução, será solicitada autorização - **conceda todas as permissões**
+   - Na primeira execução, será solicitada autorização - revise e autorize as permissões solicitadas para a sua planilha
 
 2. **Verifique os resultados**:
    - Duas novas abas serão criadas: "Fila WhatsApp" e "Painel Recorrência"
@@ -109,11 +109,7 @@ Este sistema automatizado foi criado para gerenciar os serviços de dedetizaçã
 - Execute a função `marcarComoEnviado` (pelo menu ou atalho)
 - O sistema registrará a data/hora do envio
 
-### 3. Exportar relatório
-- Execute a função `exportarRelatorio`
-- Um novo arquivo será criado com os dados atuais
-
-### 4. Atualizar manualmente
+### 3. Atualizar manualmente
 - Execute a função `testeManual` a qualquer momento
 - Útil se você adicionou novos clientes e quer atualizar imediatamente
 
@@ -123,8 +119,8 @@ Este sistema automatizado foi criado para gerenciar os serviços de dedetizaçã
 |--------|-----------|
 | `testeManual()` | Executa a automação completa manualmente |
 | `marcarComoEnviado()` | Marca um cliente como contactado |
-| `exportarRelatorio()` | Exporta os dados para um novo arquivo |
-| `testeEmail()` | Envia um e-mail de teste |
+| `testarEmail()` | Testa o relatório por e-mail |
+| `configurarSistema()` | Prepara a planilha e cria o gatilho diário |
 | `limparGatilhos()` | Remove todos os gatilhos (para reiniciar) |
 
 ## 🛠️ Solução de Problemas
