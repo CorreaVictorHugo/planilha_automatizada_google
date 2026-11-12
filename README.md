@@ -1,124 +1,45 @@
-# 🚀 Automação de Recorrência Fimpra
+# Automação de recorrência de serviços — Fimpra
 
-**Sistema inteligente para gerenciamento de serviços de dedetização**
+Projeto de portfólio em **Google Sheets e Google Apps Script** para acompanhar serviços recorrentes, organizar contatos e apoiar o planejamento da equipe.
 
----
+## O que o código faz
 
-## 📁 Estrutura do Projeto
+- Calcula a data de retorno conforme o tipo de serviço.
+- Organiza serviços em abas mensais e prepara recorrências futuras.
+- Gera uma fila de contatos com links para WhatsApp e um painel de recorrência.
+- Atualiza os dados por uma rotina diária configurada no Apps Script.
+- Prepara relatórios internos e mensagens para acompanhamento.
 
+## Tecnologias
+
+Google Sheets · Google Apps Script (JavaScript) · HTML para modelos de e-mail.
+
+## Como experimentar
+
+1. Faça uma cópia de uma planilha de teste com os cabeçalhos esperados pelo script.
+2. Abra **Extensões → Apps Script** e cole o conteúdo de [Codigo_pronto_para_colar.gs](Codigo_pronto_para_colar.gs).
+3. Antes de executar, revise no início do script o e-mail do relatório, o WhatsApp da empresa, o período de planejamento, o nome da aba modelo e as regras de recorrência.
+4. Execute `configurarSistema()` uma vez e autorize somente as permissões necessárias para o uso pretendido.
+5. Confira as abas criadas e teste `testeManual()` com dados fictícios antes de utilizar dados reais.
+
+O script contém configurações específicas da operação original. Para reutilizá-lo, adapte essas configurações à sua planilha. Os [modelos de e-mail](templates/) e as [instruções de configuração](INSTRUCOES_CONFIGURACAO.md) complementam o código.
+
+## Estrutura
+
+```text
+├── Codigo_pronto_para_colar.gs
+├── INSTRUCOES_CONFIGURACAO.md
+├── RESUMO_EXECUTIVO.md
+├── templates/
+│   ├── template_email_cliente.html
+│   └── template_email_equipe.html
+└── README.md
 ```
-planilha_recorrencoa_autmotizada/
-├── automacao_completa.js          # 📜 Código principal (Google Apps Script)
-├── INSTRUCOES_CONFIGURACAO.md    # 📖 Guia completo de configuração
-├── RESUMO_EXECUTIVO.md            # 📋 Resumo dos benefícios e funcionalidades
-├── Controle_Agendamento_Dedetização.csv  # 📊 Dados de exemplo
-├── TEXTO-PARA-ENVIO-CLIENTE.txt   # 💬 Template de mensagem
-└── README.md                      # 📄 Este arquivo
-```
 
----
+## Demonstração e resultados
 
-## 🎯 O que este sistema faz
+Este repositório apresenta a implementação e a configuração; não inclui uma planilha pública conectada nem métricas verificadas de redução de tempo ou aumento de renovações. A operação diária depende da instalação do script em uma planilha e da revisão das permissões e dos dados utilizados.
 
-✅ **Identifica automaticamente** serviços atrasados ou próximos de vencer\
-✅ **Cria uma fila organizada** para contato via WhatsApp\
-✅ **Gera um painel consolidado** com estatísticas atualizadas\
-✅ **Atualiza diariamente** sem necessidade de intervenção manual\
-✅ **Evita duplicatas** - cada cliente aparece apenas uma vez\
-✅ **Prioriza automaticamente** - atrasados aparecem primeiro
+## Autor
 
----
-
-## 🚀 Como começar (Passo a Passo Rápido)
-
-### 1️⃣ Prepare sua planilha
-- Abra `Controle_Agendamento_Dedetização.csv` no **Google Sheets**
-- Crie uma aba chamada **"Configurações"** e cole o texto de `TEXTO-PARA-ENVIO-CLIENTE.txt` na célula A1
-
-### 2️⃣ Configure o script
-- No Google Sheets, vá em **Extensões > Apps Script**
-- Cole todo o conteúdo de `automacao_completa.js`
-- Salve o projeto
-
-### 3️⃣ Execute pela primeira vez
-- Selecione a função `testeManual` e clique em ▶️ Executar
-- Autorize o script quando solicitado
-- Verifique as novas abas criadas: **"Fila WhatsApp"** e **"Painel Recorrência"**
-
-### 4️⃣ Atualização automática
-- O sistema criará automaticamente um gatilho para executar **todos os dias às 8h**
-- Você pode verificar os gatilhos no ícone de relógio (⏰) no editor de scripts
-
----
-
-## 📊 O que você verá
-
-### Fila WhatsApp
-- Lista completa de clientes para contato
-- Ordenada por prioridade (🔴 atrasados → 🟡 próximos → 🟢 agendados)
-- Links diretos para WhatsApp com mensagem pré-preenchida
-- Sistema para marcar como "Enviado"
-
-### Painel Recorrência
-- Visão consolidada sem duplicatas
-- Estatísticas: total atrasados, próximos a vencer, contatos
-- Última data de atualização
-- Formatação visual por cores
-
----
-
-## 🎓 Documentação Completa
-
-Para detalhes completos, consulte:
-- **[Instruções de Configuração](INSTRUCOES_CONFIGURACAO.md)** - Guia passo a passo detalhado
-- **[Resumo Executivo](RESUMO_EXECUTIVO.md)** - Benefícios e métricas esperadas
-
----
-
-## 🛠️ Funções Principais
-
-| Função | O que faz | Como usar |
-|--------|-----------|------------|
-| `testeManual()` | Executa toda a automação manualmente | Ideal para testes ou após adicionar muitos clientes |
-| `marcarComoEnviado()` | Marca um cliente como contactado | Selecione a linha e execute |
-| `exportarRelatorio()` | Exporta dados para um novo arquivo | Para análise ou backup |
-| `testeEmail()` | Envia e-mail de teste | Valida o sistema de e-mails |
-
----
-
-## 📈 Benefícios Esperados
-
-- ⏱️ **98% mais rápido** na identificação de clientes
-- 💰 **25% mais renovações** de contratos
-- 📉 **75% menos perdas** por esquecimento
-- 😊 **Equipe mais satisfeita** com processo automatizado
-
----
-
-## 📞 Suporte
-
-**Victor Hugo - Desenvolvedor**
-- 📧 E-mail: (correavhc@gmail.com)
-
----
-
-## 🎯 Próximos Passos
-
-1. ✅ Leia as [Instruções de Configuração](INSTRUCOES_CONFIGURACAO.md)
-2. ✅ Configure o sistema (5-10 minutos)
-3. ✅ Execute o teste manual
-4. ✅ Comece a usar diariamente
-5. ✅ Treine sua equipe (30 minutos)
-
----
-
-**"Automatize o repetitivo, foque no estratégico!"** 🚀
-
-Este sistema foi projetado para ser simples de usar, mas poderoso nos resultados. Em poucos minutos de configuração, você terá uma ferramenta que trabalhará para você 24/7, garantindo que nenhum cliente seja esquecido e que sua equipe possa focar no atendimento de qualidade.
-
----
-
-**Versão**: 1.0  
-**Data**: 26/08/2026  
-**Desenvolvedor**: Victor Hugo  
-**Empresa**: Fimpra - Controle de Pragas
+[Victor Hugo Corrêa](https://github.com/CorreaVictorHugo)
