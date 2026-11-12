@@ -26,7 +26,7 @@
 // --------------------------------------------------------------------------
 // ALTERE AQUI O E-MAIL QUE RECEBERÁ O RELATÓRIO INTERNO
 // --------------------------------------------------------------------------
-const EMAIL_RELATORIO = 'seu email';
+const EMAIL_RELATORIO = 'relatorios@exemplo.invalid';
 
 
 // --------------------------------------------------------------------------
@@ -36,7 +36,7 @@ const EMAIL_RELATORIO = 'seu email';
 //
 //
 // O código adicionará o 55 automaticamente.
-const WHATSAPP_EMPRESA = 'seu telefone';
+const WHATSAPP_EMPRESA = '00000000000';
 
 
 // Horário da atualização diária e do relatório semanal.
